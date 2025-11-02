@@ -35,6 +35,4 @@ public class CategoryEntity {
     private Timestamp createdAt;
     @UpdateTimestamp
     private Timestamp updatedAt;
-
-
 }

@@ -5,10 +5,11 @@ import in.project.billingsoftware.io.CategoryRequest;
 import in.project.billingsoftware.io.CategoryResponse;
 import in.project.billingsoftware.repository.CategoryRepository;
 import in.project.billingsoftware.service.CategoryService;
+import in.project.billingsoftware.service.ImageUploadService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -17,10 +18,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public  class CategoryServiceImpl implements CategoryService {
     private final CategoryRepository categoryRepository;
+    private final ImageUploadService imageUploadService;
 
     @Override
-    public CategoryResponse add(CategoryRequest req){
+    public CategoryResponse add(CategoryRequest req, MultipartFile image){
         CategoryEntity newCategory =  ConvertToEntity(req);
+        // Delegate image upload to separate service
+        String imagePath = imageUploadService.uploadImage(image, req);
+        newCategory.setImgUrl(imagePath);
         newCategory = categoryRepository.save(newCategory);
         return convertToResponse(newCategory);
     }
@@ -37,15 +42,17 @@ public  class CategoryServiceImpl implements CategoryService {
     public void delete(String categoryId){
        CategoryEntity existingCategory =  categoryRepository.findByCategoryId(categoryId)
                 .orElseThrow(() -> new RuntimeException("Category not found" +   categoryId));
-
+        imageUploadService.deleteImage(existingCategory.getImgUrl());
        categoryRepository.delete(existingCategory);
 
     }
 
     private CategoryEntity ConvertToEntity(CategoryRequest req){
 
-        return CategoryEntity.builder().categoryId(UUID.randomUUID().toString())
-                .name(req.getName()).bgColor(req.getBgColor())
+        return CategoryEntity.builder()
+                .categoryId(UUID.randomUUID().toString())
+                .name(req.getName())
+                .bgColor(req.getBgColor())
                 .description(req.getDescription())
                 .build();
     }
@@ -60,9 +67,5 @@ public  class CategoryServiceImpl implements CategoryService {
                 .updatedAt(newCategory.getUpdatedAt())
                 .build();
     }
-
-
-
-
 
 }
