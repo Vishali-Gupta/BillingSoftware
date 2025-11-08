@@ -17,7 +17,9 @@ const App = () => {
                 <Route path="/category" element={<ManageCategory/>}/>
                 <Route path="/items" element={<ManageItems/>}/>
                 <Route path="/users" element={<ManageUsers/>}/>
+                <Route path="/" element={<Dashboard/>}/>
             </Routes>
+
         </div>
     );
 
