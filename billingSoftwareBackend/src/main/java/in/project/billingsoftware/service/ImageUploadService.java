@@ -1,21 +1,24 @@
 package in.project.billingsoftware.service;
 
 import in.project.billingsoftware.io.CategoryRequest;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.util.Map;
 
 @Service
 public class ImageUploadService {
-    private static final String UPLOAD_DIR = "uploads/";
+
+    // 🔑 Replace with your own API key from https://api.imgbb.com/
+    private static final String IMGBB_API_KEY = "4efb103877fa490731fb37ccb2cf2417";
 
     /**
-     * Saves the image to local 'uploads' folder and returns the file path or URL.
+     * Uploads image to imgbb.com and returns the public URL.
      */
     public String uploadImage(MultipartFile image, CategoryRequest req) {
         if (image == null || image.isEmpty()) {
@@ -23,49 +26,50 @@ public class ImageUploadService {
         }
 
         try {
-            // Create uploads folder if it doesn't exist
-            File uploadDir = new File(UPLOAD_DIR);
-            if (!uploadDir.exists()) {
-                uploadDir.mkdirs();
+            // Construct upload endpoint
+            String uploadUrl = "https://api.imgbb.com/1/upload?key=" + IMGBB_API_KEY;
+
+            // HTTP headers
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+            // Prepare multipart body
+            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+            body.add("image", new ByteArrayResource(image.getBytes()) {
+                @Override
+                public String getFilename() {
+                    return image.getOriginalFilename();
+                }
+            });
+
+            HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+
+            // Send POST request
+            RestTemplate restTemplate = new RestTemplate();
+            ResponseEntity<Map> response = restTemplate.postForEntity(uploadUrl, requestEntity, Map.class);
+
+            if (response.getStatusCode() != HttpStatus.OK) {
+                throw new RuntimeException("Image upload failed with status: " + response.getStatusCode());
             }
 
-            // Generate a unique filename
-            String fileName = req.getName()  + "_" + image.getOriginalFilename();
-            fileName = fileName.replace(" ","").trim();
+            // Extract the image URL from JSON response
+            Map<String, Object> responseBody = response.getBody();
+            Map<String, Object> data = (Map<String, Object>) responseBody.get("data");
+            String imageUrl = (String) data.get("url");
 
-            // Build path and save the file
-            Path filePath = Paths.get(UPLOAD_DIR, fileName);
-            Files.write(filePath, image.getBytes());
+            System.out.println("✅ Uploaded image to imgbb: " + imageUrl);
+            return imageUrl; // Return public image URL
 
-            // Return relative path (so browser can access if exposed)
-            return "/" + UPLOAD_DIR + fileName;
-
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to upload image: " + e.getMessage(), e);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to upload image to imgbb: " + e.getMessage(), e);
         }
     }
 
     /**
-     * Deletes an image file if it exists.
+     * imgbb doesn't support delete by URL without 'delete_url' (from upload response).
+     * This method will just log a message.
      */
     public void deleteImage(String imagePath) {
-        if (imagePath == null || imagePath.isBlank()) {
-            return; // No image to delete
-        }
-
-        try {
-            Path path = Paths.get(imagePath);
-
-            // Only delete if file exists and is a regular file
-            if (Files.exists(path) && Files.isRegularFile(path)) {
-                Files.delete(path);
-                System.out.println("Deleted image: " + imagePath);
-            } else {
-                System.out.println("Image file not found: " + imagePath);
-            }
-
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to delete image: " + e.getMessage(), e);
-        }
+        System.out.println("⚠️ Deletion is not supported for imgbb public URLs. Store 'delete_url' if needed.");
     }
 }
